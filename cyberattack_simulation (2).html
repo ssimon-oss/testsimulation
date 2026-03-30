@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyberattack Simulation — Classroom Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --surface2: #1a2236;
+    --border: #1e2d47;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --accent: #3b82f6;
+    --red: #ef4444;
+    --green: #22c55e;
+    --amber: #f59e0b;
+    --cyan: #06b6d4;
+    --font-display: 'Syne', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    min-height: 100vh;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px);
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  .header {
+    border-bottom: 1px solid var(--border);
+    padding: 24px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), var(--cyan), transparent);
+    animation: scanline 3s linear infinite;
+  }
+
+  @keyframes scanline {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  .header-left { display: flex; align-items: center; gap: 16px; }
+
+  .shield-icon {
+    width: 40px; height: 40px;
+    background: linear-gradient(135deg, #1e3a5f, #0f1f3d);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 0 20px rgba(59,130,246,0.3);
+    flex-shrink: 0;
+  }
+
+  .header h1 {
+    font-family: var(--font-display);
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    color: #fff;
+  }
+
+  .header h1 span { color: var(--accent); }
+
+  .header-sub {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .badge {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-family: var(--font-mono);
+  }
+  .badge-blue { background: rgba(59,130,246,0.12); color: var(--accent); border: 1px solid rgba(59,130,246,0.3); }
+
+  .main { padding: 32px 40px; max-width: 1100px; margin: 0 auto; }
+
+  /* Attack selector */
+  .scenario-label {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+
+  .scenario-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 28px;
+  }
+
+  .scenario-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: left;
+    color: var(--text);
+    font-family: var(--font-mono);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scenario-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 0.2s;
+    background: radial-gradient(circle at 50% 0%, rgba(59,130,246,0.08), transparent 70%);
+  }
+
+  .scenario-btn:hover { border-color: rgba(59,130,246,0.4); transform: translateY(-1px); }
+  .scenario-btn:hover::before { opacity: 1; }
+
+  .scenario-btn.active {
+    border-color: var(--red);
+    background: rgba(239,68,68,0.06);
+    box-shadow: 0 0 20px rgba(239,68,68,0.15);
+  }
+  .scenario-btn.active .btn-icon { color: var(--red); }
+
+  .btn-icon { font-size: 22px; display: block; margin-bottom: 8px; }
+  .btn-name { font-size: 13px; font-weight: 500; color: var(--text); display: block; margin-bottom: 2px; }
+  .btn-desc { font-size: 11px; color: var(--muted); display: block; }
+
+  /* Status grid */
+  .status-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-size: 22px;
+    font-weight: 700;
+    font-family: var(--font-display);
+    transition: color 0.3s;
+  }
+
+  .stat-value.ok { color: var(--green); }
+  .stat-value.warn { color: var(--amber); }
+  .stat-value.err { color: var(--red); }
+
+  .stat-bar {
+    position: absolute;
+    bottom: 0; left: 0;
+    height: 2px;
+    background: var(--green);
+    transition: width 0.6s ease, background 0.3s;
+  }
+
+  /* Phase tracker */
+  .phases-label {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .phase-track {
+    display: flex;
+    gap: 0;
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .phase-step {
+    flex: 1;
+    padding: 10px 8px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    border-right: 1px solid var(--border);
+    transition: all 0.3s;
+    position: relative;
+  }
+
+  .phase-step:last-child { border-right: none; }
+  .phase-step .pnum { font-size: 10px; opacity: 0.5; display: block; margin-bottom: 2px; }
+
+  .phase-step.done {
+    background: rgba(34,197,94,0.06);
+    color: var(--green);
+  }
+
+  .phase-step.active {
+    background: rgba(239,68,68,0.1);
+    color: var(--red);
+    font-weight: 500;
+    animation: pulse-phase 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse-phase {
+    0%, 100% { background: rgba(239,68,68,0.08); }
+    50% { background: rgba(239,68,68,0.18); }
+  }
+
+  /* Terminal */
+  .terminal-wrap {
+    background: #060a12;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+
+  .terminal-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .dots { display: flex; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-r { background: #ff5f57; }
+  .dot-y { background: #febc2e; }
+  .dot-g { background: #28c840; }
+
+  .terminal-title {
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  .terminal-body {
+    padding: 16px;
+    min-height: 220px;
+    max-height: 320px;
+    overflow-y: auto;
+    font-size: 12.5px;
+    line-height: 1.75;
+  }
+
+  .terminal-body::-webkit-scrollbar { width: 4px; }
+  .terminal-body::-webkit-scrollbar-track { background: transparent; }
+  .terminal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .log { display: block; }
+  .log-ok { color: var(--green); }
+  .log-warn { color: var(--amber); }
+  .log-err { color: var(--red); }
+  .log-info { color: var(--cyan); }
+  .log-dim { color: #374151; }
+
+  .cursor {
+    display: inline-block;
+    width: 8px; height: 14px;
+    background: var(--accent);
+    vertical-align: middle;
+    animation: blink 1s step-end infinite;
+    margin-left: 2px;
+  }
+
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+  /* Defence tip */
+  .defence-box {
+    background: rgba(6,182,212,0.06);
+    border: 1px solid rgba(6,182,212,0.25);
+    border-radius: 8px;
+    padding: 14px 18px;
+    display: none;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 20px;
+  }
+
+  .defence-box.show { display: flex; animation: fadein 0.4s ease; }
+
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+  .defence-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+
+  .defence-text { font-size: 12.5px; color: var(--cyan); line-height: 1.6; }
+  .defence-text strong { font-weight: 700; display: block; margin-bottom: 3px; font-family: var(--font-display); font-size: 13px; color: #67e8f9; }
+
+  /* Controls */
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+  .btn-reset {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-reset:hover { border-color: rgba(100,116,139,0.6); color: var(--text); }
+
+  .status-indicator {
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dot-live {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+    flex-shrink: 0;
+  }
+
+  .dot-live.attacking {
+    background: var(--red);
+    animation: pulse-dot 0.8s ease-in-out infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.4); }
+  }
+
+  /* Footer */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 16px 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.06em;
+  }
+
+  /* Responsive */
+  @media (max-width: 700px) {
+    .main { padding: 20px 16px; }
+    .header { padding: 16px 20px; }
+    .footer { padding: 14px 20px; flex-direction: column; gap: 6px; }
+    .scenario-grid { grid-template-columns: repeat(2, 1fr); }
+    .status-row { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <div class="shield-icon">🛡</div>
+    <div>
+      <h1>Cyber<span>Attack</span> Simulator</h1>
+      <div class="header-sub">Classroom Security Awareness Demo</div>
+    </div>
+  </div>
+  <span class="badge badge-blue">Educational Use</span>
+</header>
+
+<main class="main">
+
+  <div class="scenario-label">// select attack scenario</div>
+  <div class="scenario-grid">
+    <button class="scenario-btn" onclick="runAttack('phishing', this)">
+      <span class="btn-icon">📧</span>
+      <span class="btn-name">Phishing</span>
+      <span class="btn-desc">Credential theft via email</span>
+    </button>
+    <button class="scenario-btn" onclick="runAttack('bruteforce', this)">
+      <span class="btn-icon">🔑</span>
+      <span class="btn-name">Brute Force</span>
+      <span class="btn-desc">Password guessing attack</span>
+    </button>
+    <button class="scenario-btn" onclick="runAttack('ransomware', this)">
+      <span class="btn-icon">🔒</span>
+      <span class="btn-name">Ransomware</span>
+      <span class="btn-desc">File encryption & ransom</span>
+    </button>
+    <button class="scenario-btn" onclick="runAttack('ddos', this)">
+      <span class="btn-icon">🌐</span>
+      <span class="btn-name">DDoS</span>
+      <span class="btn-desc">Flood & server takedown</span>
+    </button>
+  </div>
+
+  <div class="status-row">
+    <div class="stat-card">
+      <div class="stat-label">Server Health</div>
+      <div class="stat-value ok" id="srv">100%</div>
+      <div class="stat-bar" id="srv-bar" style="width:100%;"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Active Users</div>
+      <div class="stat-value ok" id="usr">240</div>
+      <div class="stat-bar" id="usr-bar" style="width:100%;"></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Threat Level</div>
+      <div class="stat-value ok" id="thr">None</div>
+      <div class="stat-bar" id="thr-bar" style="width:0%;background:var(--red);"></div>
+    </div>
+  </div>
+
+  <div class="phases-label">// attack phases</div>
+  <div class="phase-track">
+    <div class="phase-step" id="p1"><span class="pnum">01</span>Recon</div>
+    <div class="phase-step" id="p2"><span class="pnum">02</span>Intrusion</div>
+    <div class="phase-step" id="p3"><span class="pnum">03</span>Escalate</div>
+    <div class="phase-step" id="p4"><span class="pnum">04</span>Impact</div>
+    <div class="phase-step" id="p5"><span class="pnum">05</span>Detected</div>
+  </div>
+
+  <div class="terminal-wrap">
+    <div class="terminal-bar">
+      <div class="dots">
+        <div class="dot dot-r"></div>
+        <div class="dot dot-y"></div>
+        <div class="dot dot-g"></div>
+      </div>
+      <span class="terminal-title">system_log — live feed</span>
+    </div>
+    <div class="terminal-body" id="term">
+      <span class="log log-dim">[system] All systems nominal. Select an attack scenario above to begin.</span>
+      <span class="cursor"></span>
+    </div>
+  </div>
+
+  <div class="defence-box" id="defence">
+    <span class="defence-icon">🛡</span>
+    <div class="defence-text" id="defence-text"></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-reset" onclick="resetSim()">↺ Reset simulation</button>
+    <div class="status-indicator">
+      <div class="dot-live" id="live-dot"></div>
+      <span id="live-label">System online</span>
+    </div>
+  </div>
+
+</main>
+
+<footer class="footer">
+  <span>Cyberattack Simulator — For classroom educational use only</span>
+  <span>No real systems are affected by this simulation</span>
+</footer>
+
+<script>
+const scenarios = {
+  phishing: {
+    defence: '<strong>Defence Strategies</strong>Train users to spot suspicious emails — check sender addresses carefully. Enable multi-factor authentication (MFA) so stolen passwords alone are not enough. Deploy email filtering and report phishing attempts immediately.',
+    phases: [
+      { phase: 1, lines: [
+        {t:'info', m:'[10:02:01] Attacker crafts email: "Urgent: Your password expired — click here"'},
+        {t:'dim',  m:'[10:02:03] Email spoofed from: IT-Support@c0mpany.net (note the zero)'},
+        {t:'warn', m:'[10:02:10] Email delivered to 80 employees'},
+      ]},
+      { phase: 2, lines: [
+        {t:'warn', m:'[10:07:44] User "jsmith" clicked malicious link'},
+        {t:'err',  m:'[10:07:45] Credentials entered on fake login page'},
+        {t:'err',  m:'[10:07:46] CAPTURED: jsmith / P@ssw0rd123  →  attacker C2 server'},
+      ]},
+      { phase: 3, lines: [
+        {t:'err',  m:'[10:09:01] Attacker logs in as jsmith — legitimate session'},
+        {t:'err',  m:'[10:09:12] Lateral movement: scanning internal network'},
+        {t:'err',  m:'[10:09:30] Found shared drive: \\fileserver\\HR_Payroll'},
+        {t:'err',  m:'[10:09:31] Privilege escalation via unpatched CVE-2024-1337'},
+      ]},
+      { phase: 4, lines: [
+        {t:'err',  m:'[10:10:05] 4,200 employee records exfiltrated (42 MB)'},
+        {t:'err',  m:'[10:10:08] Data uploaded to external paste site'},
+        {t:'err',  m:'[10:10:09] Server health degrading — backdoor installed'},
+      ]},
+      { phase: 5, lines: [
+        {t:'ok',   m:'[10:14:22] SIEM alert: unusual data transfer volume flagged'},
+        {t:'ok',   m:'[10:14:30] SOC analyst investigating...'},
+        {t:'ok',   m:'[10:15:01] Incident response team activated'},
+        {t:'warn', m:'[10:15:10] jsmith account suspended. Damage: data breach disclosed'},
+      ]},
+    ],
+    srv:  ['100%','100%','85%','45%','45%'],
+    usr:  [240, 240, 240, 238, 238],
+    thr:  ['None','Low','High','Critical','Critical'],
+    clr:  ['ok','ok','err','err','err'],
+    thrP: [0, 20, 70, 100, 100],
+    srvP: [100, 100, 85, 45, 45],
+    usrP: [100, 100, 100, 99, 99],
+  },
+  bruteforce: {
+    defence: '<strong>Defence Strategies</strong>Rate-limit and lock accounts after multiple failed login attempts. Enforce MFA on all accounts. Alert on unusual login patterns and geographic anomalies. Use a password manager to encourage strong, unique passwords.',
+    phases: [
+      { phase: 1, lines: [
+        {t:'info', m:'[08:30:00] Attacker identifies login portal: https://corp.example.com/login'},
+        {t:'dim',  m:'[08:30:01] Valid username found via forgot-password oracle: admin@corp.com'},
+      ]},
+      { phase: 2, lines: [
+        {t:'warn', m:'[08:30:05] Brute force started — 500 attempts/second'},
+        {t:'warn', m:'[08:30:06] Attempt 001: password → FAIL'},
+        {t:'warn', m:'[08:30:06] Attempt 002: 123456   → FAIL'},
+        {t:'warn', m:'[08:30:07] Attempt 847: company2024 → SUCCESS ✓'},
+        {t:'err',  m:'[08:30:07] Admin account compromised'},
+      ]},
+      { phase: 3, lines: [
+        {t:'err',  m:'[08:30:15] Admin panel accessed'},
+        {t:'err',  m:'[08:30:18] New backdoor admin account created: svc_monitor'},
+        {t:'err',  m:'[08:30:22] Firewall rules modified — ports 4444, 8080 opened outbound'},
+      ]},
+      { phase: 4, lines: [
+        {t:'err',  m:'[08:31:00] All user password hashes dumped from database'},
+        {t:'err',  m:'[08:31:05] Config files and API keys exfiltrated'},
+        {t:'err',  m:'[08:31:10] Crypto-miner deployed — server CPU at 100%'},
+      ]},
+      { phase: 5, lines: [
+        {t:'ok',   m:'[08:45:00] IDS: 42,000 failed logins detected in last 15 min'},
+        {t:'ok',   m:'[08:45:05] Rate limiting applied — too late'},
+        {t:'warn', m:'[08:45:12] Admin password reset. Backdoor account removed'},
+      ]},
+    ],
+    srv:  ['100%','100%','90%','55%','55%'],
+    usr:  [240, 240, 240, 235, 235],
+    thr:  ['None','Low','High','Critical','High'],
+    clr:  ['ok','ok','err','err','warn'],
+    thrP: [0, 20, 70, 100, 60],
+    srvP: [100, 100, 90, 55, 55],
+    usrP: [100, 100, 100, 98, 98],
+  },
+  ransomware: {
+    defence: '<strong>Defence Strategies</strong>Maintain offline/off-site backups and test restoration regularly. Keep software patched. Use endpoint detection (EDR) to catch malicious processes early. Restrict macro execution in Office documents and limit admin privileges.',
+    phases: [
+      { phase: 1, lines: [
+        {t:'info', m:'[14:00:01] Malicious macro embedded in: Invoice_Q4.docm'},
+        {t:'dim',  m:'[14:00:02] Document sent via phishing email to finance team'},
+      ]},
+      { phase: 2, lines: [
+        {t:'warn', m:'[14:05:33] User opened document and enabled macros'},
+        {t:'err',  m:'[14:05:34] Macro executed — PowerShell dropper launched'},
+        {t:'err',  m:'[14:05:35] Ransomware binary downloaded from attacker C2 server'},
+        {t:'err',  m:'[14:05:36] Antivirus bypassed via code obfuscation'},
+      ]},
+      { phase: 3, lines: [
+        {t:'err',  m:'[14:05:40] Shadow copy deletion: vssadmin delete shadows /all'},
+        {t:'err',  m:'[14:05:41] Backup service processes terminated'},
+        {t:'err',  m:'[14:05:42] Ransomware spreading via network shares to 12 endpoints'},
+      ]},
+      { phase: 4, lines: [
+        {t:'err',  m:'[14:06:00] ENCRYPTING: /documents/**  (.docx .xlsx .pdf)'},
+        {t:'err',  m:'[14:06:03] ENCRYPTING: /database/**  — 14 GB encrypted'},
+        {t:'err',  m:'[14:06:10] README_DECRYPT.txt placed on every desktop'},
+        {t:'err',  m:'[14:06:10] DEMAND: 5 BTC (~$300,000) — 48 hour deadline'},
+      ]},
+      { phase: 5, lines: [
+        {t:'ok',   m:'[14:10:00] EDR alert: mass file rename event detected'},
+        {t:'warn', m:'[14:10:05] Network isolated — encryption already complete'},
+        {t:'ok',   m:'[14:10:10] IR team: restoring from last clean backup (3 days ago)'},
+        {t:'warn', m:'[14:10:12] Est. recovery: 5–7 days. Data loss: 3 days of work'},
+      ]},
+    ],
+    srv:  ['100%','95%','80%','5%','5%'],
+    usr:  [240, 238, 220, 0, 0],
+    thr:  ['None','Medium','High','Critical','Critical'],
+    clr:  ['ok','warn','err','err','err'],
+    thrP: [0, 40, 70, 100, 100],
+    srvP: [100, 95, 80, 5, 5],
+    usrP: [100, 99, 92, 0, 0],
+  },
+  ddos: {
+    defence: '<strong>Defence Strategies</strong>Use a CDN or DDoS mitigation service (e.g. Cloudflare, Akamai) that absorbs floods upstream. Implement rate limiting and auto-scaling. Set up traffic scrubbing to filter malicious packets while passing legitimate requests.',
+    phases: [
+      { phase: 1, lines: [
+        {t:'info', m:'[09:00:00] Attacker activates botnet of 50,000 compromised devices'},
+        {t:'dim',  m:'[09:00:01] Target: https://shop.example.com (e-commerce site)'},
+      ]},
+      { phase: 2, lines: [
+        {t:'warn', m:'[09:00:05] Traffic spike: 1,000 req/s → 180,000 req/s'},
+        {t:'warn', m:'[09:00:06] Requests originating from 40 countries simultaneously'},
+        {t:'err',  m:'[09:00:08] Load balancer overwhelmed — queue backing up'},
+      ]},
+      { phase: 3, lines: [
+        {t:'err',  m:'[09:00:10] Database connection pool exhausted (500/500)'},
+        {t:'err',  m:'[09:00:12] HTTP 503 errors returned to all real users'},
+        {t:'err',  m:'[09:00:15] CPU load: 100% across all 8 application servers'},
+      ]},
+      { phase: 4, lines: [
+        {t:'err',  m:'[09:01:00] Site completely unreachable — all servers down'},
+        {t:'err',  m:'[09:01:05] Revenue loss rate: ~$12,000/minute'},
+        {t:'err',  m:'[09:01:10] Sustained flood: 180 Gbps ongoing'},
+      ]},
+      { phase: 5, lines: [
+        {t:'ok',   m:'[09:15:00] CDN scrubbing centre activated — absorbing attack traffic'},
+        {t:'ok',   m:'[09:15:30] IP block rules deployed for top attack sources'},
+        {t:'ok',   m:'[09:16:00] Site recovering — legitimate traffic filtering through'},
+        {t:'warn', m:'[09:16:10] Downtime: 16 minutes. Revenue lost: ~$192,000'},
+      ]},
+    ],
+    srv:  ['100%','70%','30%','0%','60%'],
+    usr:  [240, 150, 20, 0, 120],
+    thr:  ['None','Medium','Critical','Critical','Medium'],
+    clr:  ['ok','warn','err','err','warn'],
+    thrP: [0, 40, 100, 100, 40],
+    srvP: [100, 70, 30, 0, 60],
+    usrP: [100, 63, 8, 0, 50],
+  }
+};
+
+let running = false;
+let activeBtn = null;
+
+function setPhase(n) {
+  for (let i = 1; i <= 5; i++) {
+    const el = document.getElementById('p' + i);
+    el.className = 'phase-step' + (i < n ? ' done' : i === n ? ' active' : '');
+  }
+}
+
+function addLog(type, msg) {
+  const term = document.getElementById('term');
+  const cursor = term.querySelector('.cursor');
+  if (cursor) cursor.remove();
+  const span = document.createElement('span');
+  span.className = 'log log-' + type;
+  span.textContent = msg + '\n';
+  term.appendChild(span);
+  const c = document.createElement('span');
+  c.className = 'cursor';
+  term.appendChild(c);
+  term.scrollTop = term.scrollHeight;
+}
+
+function updateStatus(i, s) {
+  const srv = document.getElementById('srv');
+  const usr = document.getElementById('usr');
+  const thr = document.getElementById('thr');
+  srv.textContent = s.srv[i]; srv.className = 'stat-value ' + s.clr[i];
+  usr.textContent = s.usr[i]; usr.className = 'stat-value ' + s.clr[i];
+  thr.textContent = s.thr[i]; thr.className = 'stat-value ' + s.clr[i];
+  document.getElementById('srv-bar').style.width = s.srvP[i] + '%';
+  document.getElementById('srv-bar').style.background = s.clr[i] === 'ok' ? 'var(--green)' : s.clr[i] === 'warn' ? 'var(--amber)' : 'var(--red)';
+  document.getElementById('usr-bar').style.width = s.usrP[i] + '%';
+  document.getElementById('usr-bar').style.background = s.clr[i] === 'ok' ? 'var(--green)' : s.clr[i] === 'warn' ? 'var(--amber)' : 'var(--red)';
+  document.getElementById('thr-bar').style.width = s.thrP[i] + '%';
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function runAttack(type, btn) {
+  if (running) return;
+  running = true;
+  if (activeBtn) activeBtn.classList.remove('active');
+  activeBtn = btn;
+  btn.classList.add('active');
+
+  document.getElementById('defence').className = 'defence-box';
+  const liveDot = document.getElementById('live-dot');
+  liveDot.classList.add('attacking');
+  document.getElementById('live-label').textContent = 'Attack in progress...';
+
+  const term = document.getElementById('term');
+  term.innerHTML = '<span class="cursor"></span>';
+  for (let i = 1; i <= 5; i++) document.getElementById('p' + i).className = 'phase-step';
+
+  const s = scenarios[type];
+  addLog('dim', '[system] Initiating simulation: ' + type.toUpperCase());
+  await delay(500);
+
+  for (let i = 0; i < s.phases.length; i++) {
+    const p = s.phases[i];
+    setPhase(p.phase);
+    updateStatus(i, s);
+    addLog('dim', '');
+    for (const line of p.lines) {
+      addLog(line.t, line.m);
+      await delay(400);
+    }
+    await delay(650);
+  }
+
+  setPhase(6);
+  addLog('dim', '');
+  addLog('ok', '[simulation complete] ────────────────────────────────────');
+
+  const defBox = document.getElementById('defence');
+  document.getElementById('defence-text').innerHTML = s.defence;
+  defBox.className = 'defence-box show';
+
+  liveDot.classList.remove('attacking');
+  document.getElementById('live-label').textContent = 'Simulation complete';
+  running = false;
+}
+
+function resetSim() {
+  running = false;
+  if (activeBtn) { activeBtn.classList.remove('active'); activeBtn = null; }
+  for (let i = 1; i <= 5; i++) document.getElementById('p' + i).className = 'phase-step';
+  document.getElementById('srv').textContent = '100%'; document.getElementById('srv').className = 'stat-value ok';
+  document.getElementById('usr').textContent = '240'; document.getElementById('usr').className = 'stat-value ok';
+  document.getElementById('thr').textContent = 'None'; document.getElementById('thr').className = 'stat-value ok';
+  document.getElementById('srv-bar').style.width = '100%'; document.getElementById('srv-bar').style.background = 'var(--green)';
+  document.getElementById('usr-bar').style.width = '100%'; document.getElementById('usr-bar').style.background = 'var(--green)';
+  document.getElementById('thr-bar').style.width = '0%';
+  document.getElementById('term').innerHTML = '<span class="log log-dim">[system] All systems nominal. Select an attack scenario above to begin.</span><span class="cursor"></span>';
+  document.getElementById('defence').className = 'defence-box';
+  document.getElementById('live-dot').classList.remove('attacking');
+  document.getElementById('live-label').textContent = 'System online';
+}
+</script>
+</body>
+</html>
